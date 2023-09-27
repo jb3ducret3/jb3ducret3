@@ -1,0 +1,79 @@
+!/bin/bashsystemctl status apache2.service
+
+ip=$(hostname -I)
+
+# Vérifier si Apache est installé
+if ! command -v apache2 &>/dev/null; then
+    echo "Apache n'est pas installé. Installation d'Apache..."
+    sudo apt update
+    sudo apt install apache2 apache2-doc -y
+else
+    echo "Apache est déjà installé."
+fi
+
+# Vérifier l'existence du fichier /var/www/html/index.html
+if [ -e "/var/www/html/index.html" ]; then
+    read -p "Le fichier index.html existe déjà. Voulez-vous le remplacer et effectuer une sauvegarde ? >
+
+    if [ "$choix" == "oui" ]; then
+        sudo mv "/var/www/html/index.html" "/var/www/html/backindex.html"
+        echo "Le fichier index.html a été déplacé vers backindex.html."
+        sudo touch "/var/www/html/index.html" # Création d'un nouveau fichier index.html
+        echo "Nouveau fichier index.html créé."
+    else
+        echo "Opération annulée. Aucun fichier n'a été modifié."
+    fi
+fi
+
+# Chemin du fichier de configuration dir.conf
+dir_conf="/etc/apache2/mods-available/dir.conf"
+
+# Création du fichier index.html
+var_site1="/var/www/html/index.html"
+cat << EOF | sudo tee "$var_site1"
+<html>
+<head>
+<title>Mon site</title>
+</head>
+<body>
+<H1>BIENVENUE SUR MA PAGE - LE SUICIDE N'EST PAS UNE SOLUTION</H1>
+<H4>Test OK</H4>
+</body>
+</html>
+EOF
+# Redémarrage d'Apache2
+sudo systemctl restart apache2
+echo "Installation et configuration d'Apache terminées."
+
+# Vérifier l'existence du fichier de configuration default-ssl.conf
+if [ ! -e "/etc/apache2/sites-available/default-ssl.conf" ]; then
+    echo "Le fichier default-ssl.conf n'existe pas. Il doit être créé pour activer SSL."
+    exit 1
+fi
+
+# Activer le module SSL
+sudo a2enmod ssl
+
+# Créer un certificat SSL auto-signé
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/autosigne.key -out /etc/ssl/certs/autosigne.crt -subj "/C=FR/ST=IDF/L=Paris/O=Societe/CN=mondomaine.com/emailAddress=webmaster@mondomaine.com"
+
+# Mettre à jour le fichier de configuration default-ssl.conf
+sudo cat << EOF | sudo tee /etc/apache2/sites-available/default-ssl.conf
+<VirtualHost *:443>
+    ServerAdmin user@$ip
+    DocumentRoot /var/www/html
+    ErrorLog \${APACHE_LOG_DIR}/error.log
+    CustomLog \${APACHE_LOG_DIR}/access.log combined
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/certs/autosigne.crt
+    SSLCertificateKeyFile /etc/ssl/private/autosigne.key
+</VirtualHost>
+EOF
+
+# Activer la configuration SSL
+sudo a2ensite default-ssl.conf
+
+# Redémarrer Apache2 pour appliquer les modifications
+sudo systemctl restart apache2
+
+echo "Configuration SSL terminée."
