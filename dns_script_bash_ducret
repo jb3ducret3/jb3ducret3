@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# ÉTAPE 1: Installer BIND9
+echo "ÉTAPE 1: Installation de BIND9"
+sudo apt update
+sudo apt install bind9
+sudo apt install dnsutils
+
+# ÉTAPE 2: Demander à l'utilisateur de saisir l'adresse IP du DNS et le nom de domaine
+echo "ÉTAPE 2: Saisie de l'adresse IP du DNS et du nom de domaine"
+DNS_IP=$(hostname -I)
+read -p "Veuillez saisir le nom de domaine (par exemple, example.com): " DOMAIN_NAME
+
+# Vérifier l'existence du fichier /etc/hosts
+if [ ! -f "/etc/hosts" ]; then
+    echo "Le fichier /etc/hosts n'existe pas. Veuillez vérifier la configuration du fichier /etc/hosts."
+    exit 1
+fi
+
+# Ajouter une entrée dans /etc/hosts
+sudo bash -c "echo '$DNS_IP   $DOMAIN_NAME' >> /etc/hosts"
+
+# Variables pour les fichiers de configuration
+NAMED_CONF_LOCAL="/etc/bind/named.conf.local"
+DB_EXAMPLE="/etc/bind/zones/db.$DOMAIN_NAME"
+DB_192="/etc/bind/zones/db.$(echo "$DNS_IP" | awk -F '.' '{print $3}')"
+
+# ÉTAPE 3: Créer les répertoires et fichiers de configuration
+echo "ÉTAPE 3: Création des répertoires et fichiers de configuration"
+# Créer le répertoire s'il n'existe pas
+sudo mkdir -p "$(dirname "$DB_EXAMPLE")"
+sudo mkdir -p "$(dirname "$DB_192")"
+
+# Configuration pour la zone example.com
+cat << EOF | sudo tee "$NAMED_CONF_LOCAL"
+zone "$DOMAIN_NAME" {
+    type master;
+    file "$DB_EXAMPLE";
+};
+
+zone "$(echo "$DNS_IP" | awk -F '.' '{print $3"."$2"."$1}').in-addr.arpa" {
+    type master;
+    file "$DB_192";
+
+};
+EOF
+
+# Fichier de données BIND pour la zone example.com
+cat << EOF | sudo tee "$DB_EXAMPLE"
+\$TTL 604800
+@       IN      SOA     ns1.$DOMAIN_NAME. admin.$DOMAIN_NAME. (
+                             2011112904 ; Serial
+                             604800     ; Refresh
+                             86400      ; Retry
+                             2419200    ; Expire
+                             604800 )   ; Negative Cache TTL
+;
+@       IN      NS      ns1.$DOMAIN_NAME.
+ns1     IN      A       $DNS_IP   ; Adresse IP du serveur DNS
+EOF
+
+# Fichier de données BIND pour la zone de résolution inverse
+cat << EOF | sudo tee "$DB_192"
+\$TTL 604800
+@       IN      SOA     ns1.$DOMAIN_NAME. admin.$DOMAIN_NAME. (
+                             2011112904 ; Serial
+                             604800     ; Refresh
+                             86400      ; Retry
+                             2419200    ; Expire
+                             604800 )   ; Negative Cache TTL
+;
+@       IN      NS      ns1.$DOMAIN_NAME.
+$(echo "$DNS_IP" | awk -F '.' '{print $4}')      IN      PTR     ns1.$DOMAIN_NAME.
+EOF
+
+# ÉTAPE 4: Vérifier la syntaxe des fichiers de configuration
+echo "ÉTAPE 4: Vérification de la syntaxe des fichiers de configuration"
+echo "ÉTAPE 4: Vérification de la syntaxe des fichiers de configuration"
+sudo named-checkconf
+sudo named-checkzone "$DOMAIN_NAME" "$DB_EXAMPLE"
+sudo named-checkzone "$(echo "$DNS_IP" | awk -F '.' '{print $3"."$2"."$1}').in-addr.arpa" "$DB_192"
+
+# ÉTAPE 5: Redémarrer BIND et finaliser l'installation
+if [ $? -eq 0 ]; then
+    echo "ÉTAPE 5: Vérifications de la configuration réussies. Redémarrage de BIND..."
+    # Redémarrer BIND
+    sudo systemctl restart bind9
+    echo "BIND redémarré. Installation terminée."
+else
+    echo "ÉTAPE 5: Les vérifications de la configuration ont échoué. Veuillez corriger les erreurs avan>
+fi
