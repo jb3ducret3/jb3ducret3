@@ -1,0 +1,100 @@
+#!/bin/bash
+
+#----APPEL FONCTIONS EXTERNES----
+. fonctions.sh
+
+no_color
+
+PS3="
+ Action : (1-Infos_user) (2- PASS_user) (3-ADD_user) (4-DEL_user) (5-DELDATA_user) (6-END)"
+ 
+1 ) #Infos_user
+read -p "Entrer le nom de l'utilisateur pour verifier la derniere connexion et le dernier changement de mot de passe" USERNAME
+last $USERNAME
+# sudo chage -l $USERNAME commande complete
+sudo passwd -S $USERNAME | awk '{print "Last password change: " $3 " " $4 " " $5}'
+;;
+2 ) PASS_user
+read -p "entrer le nom du compte qui dois voir son mot de passe effacé " $MDP
+sudo passwd -e $MDP
+;;
+
+
+3 ) ADD_user
+PS3="
+CHOIX: (1-UNIQUE) (2-PAR LOT) (3-END)"
+s/choix 1
+read -p "Veuillez entrer le nom de l'utilisateur : " USERNAME
+
+# Vérifier si le nom d'utilisateur existe déjà dans /etc/hosts
+if grep -q -w "$USERNAME" /etc/hosts; then
+    echo "Le nom d'utilisateur '$USERNAME' est déjà utilisé dans /etc/hosts."
+fi
+# Créer l'utilisateur
+sudo useradd "$USERNAME"
+
+;;
+s/choix 2
+# Liste des utilisateurs à créer
+read -p " entrer les nom d'utilisateurs a remplir" utili1 
+read -p " entrer les nom d'utilisateurs a remplir" utili2 
+read -p " entrer les nom d'utilisateurs a remplir" utili3
+UTILISATEURS=("$utili1" "$utili2" "$utili3")
+
+# Parcourir la liste des utilisateurs
+for UTILISATEUR in "${UTILISATEURS[@]}"; do
+    # Créer l'utilisateur
+    sudo adduser "$UTILISATEUR"
+
+    # Vérifier si la création a réussi
+    if [ $? -ne 0 ]; then
+        echo "Erreur lors de la création de l'utilisateur $UTILISATEUR"
+        exit 1
+    fi
+done
+
+echo "Création des utilisateurs terminée avec succès"
+exit 0
+clear
+;;
+
+s/ choix 3
+echo "Fin du programme."
+ exit 0
+;;
+
+4 ) DEL_user
+read -p "Entrer le nom de l'utilisateur à supprimer " USERNAME
+sudo userdel  $USERNAME
+clear
+;;
+
+
+5 ) DELDATA_user
+read -p "entrer le nom de l'utilisateur ce qui englobera aussi ses données" USERNAME
+sudo userdel -r $USERNAME
+clear
+;;
+
+
+6 ) FIN 
+echo "Fin du programme."
+ exit 0
+;;
+clear
+;;
+
+
+retour )
+clear
+red
+echo TRAITEMENT TERMINE
+echo
+no_color
+break
+;;
+ 
+ 
+ esac
+ 
+ done
