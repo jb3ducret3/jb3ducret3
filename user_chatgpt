@@ -1,0 +1,71 @@
+#!/bin/bash
+
+PS3="
+Action : (1-Infos_user) (2-PASS_user) (3-ADD_user) (4-DEL_user) (5-DELDATA_user) (6-END) "
+while true; do
+    clear
+    select choice in "Infos_user" "PASS_user" "ADD_user" "DEL_user" "DELDATA_user" "END"; do  # Correction: "DELDATA_user" au lieu de "DELDATA_use"
+        case $REPLY in
+
+        1 ) # Infos_user
+            read -p "Entrer le nom de l'utilisateur pour vérifier la dernière connexion et le dernier changement de mot de passe : " USERNAME
+            last $USERNAME
+            # sudo chage -l $USERNAME # Correction: La commande chage n'a pas besoin de 'awk' pour afficher les informations.
+            sudo chage -l $USERNAME  # Correction: Utilisation correcte de chage pour afficher les informations du mot de passe.
+            ;;
+        2 ) # PASS_user
+            read -p "Entrer le nom du compte qui doit voir son mot de passe expiré : " MDP  # Correction: Utilisation de MDP au lieu de $MDP
+            sudo passwd -e $MDP
+            ;;
+        3 ) # ADD_user
+            PS3="CHOIX: (1-UNIQUE) (2-PAR LOT) (3-END)"
+            sub_options=("Ajouter un utilisateur unique" "Ajouter des utilisateurs par lot" "Retour")  # Correction: Utilisation de sub_options au lieu de s/sub_options/sous_options/
+            select sub_opt in "${sub_options[@]}"; do
+                case $sub_opt in
+                    "Ajouter un utilisateur unique")
+                        read -p "Veuillez entrer le nom de l'utilisateur : " USERNAME
+                        if grep -q -w "$USERNAME" /etc/hosts; then
+                            echo "Le nom d'utilisateur '$USERNAME' est déjà utilisé dans /etc/hosts."
+                        fi
+                        sudo useradd "$USERNAME"
+                        ;;
+                    "Ajouter des utilisateurs par lot")
+                        read -p "Veuillez entrer les noms d'utilisateurs séparés par des espaces : " UTILISATEURS_INPUT
+                        IFS=' ' read -r -a UTILISATEURS <<< "$UTILISATEURS_INPUT"
+                        for UTILISATEUR in "${UTILISATEURS[@]}"; do
+                            sudo adduser "$UTILISATEUR"
+                            if [ $? -ne 0 ]; then
+                                echo "Erreur lors de la création de l'utilisateur $UTILISATEUR"
+                                exit 1
+                            fi
+                        done
+                        echo "Création des utilisateurs terminée avec succès"
+                        ;;
+                    "Retour")
+                        break
+                        ;;
+                    *)
+                        echo "Choix non valide"
+                        ;;
+                esac
+            done
+            ;;
+        4 ) # DEL_user
+            read -p "Entrer le nom de l'utilisateur à supprimer : " USERNAME
+            sudo userdel "$USERNAME"  # Correction: Ajout des guillemets autour de $USERNAME
+            ;;
+        5 ) # DELDATA_user
+            read -p "Entrer le nom de l'utilisateur à supprimer (y compris ses données) : " USERNAME
+            sudo userdel -r "$USERNAME"  # Correction: Ajout des guillemets autour de $USERNAME
+            ;;
+        6 ) # FIN
+            echo "Fin du programme."
+            exit 0
+            ;;
+        *)
+            echo "Choix non valide"
+            ;;
+        esac
+    done
+
+done
